@@ -2,22 +2,29 @@ import streamlit as st
 import numpy as np
 import pandas as pd
 
-# --- Configuración Profesional de la App ---
+# --- Configuración de la App ---
 st.set_page_config(
-    page_title="Calculadora de Raíces Móvil",
-    page_icon="🧮",
-    layout="centered"  # 'centered' funciona mejor en móviles que 'wide'
+    page_title="Analizador Polinomial",
+    page_icon="🎯",
+    layout="centered"
 )
 
-# --- Lógica Matemática ---
+# --- Lógica de Cálculo ---
 def calcular_raices(coeficientes):
-    """Calcula raíces reales e imaginarias usando NumPy."""
+    """Calcula raíces reales e imaginarias."""
     raices = np.roots(coeficientes)
     datos = []
     for i, r in enumerate(raices):
+        # Formateo de número complejo para visualización amigable
+        if np.isreal(r):
+            valor_str = f"{r.real:.4f}"
+        else:
+            signo = "+" if r.imag >= 0 else "-"
+            valor_str = f"{r.real:.4f} {signo} {abs(r.imag):.4f}i"
+            
         datos.append({
             "ID": f"x{i+1}",
-            "Valor": f"{r.real:.3f} {'+' if r.imag >= 0 else '-'} {abs(r.imag):.3f}i" if r.imag != 0 else f"{r.real:.3f}",
+            "Valor": valor_str,
             "Tipo": "Real" if np.isreal(r) else "Compleja",
             "Real": r.real,
             "Imag": r.imag
@@ -25,68 +32,80 @@ def calcular_raices(coeficientes):
     return pd.DataFrame(datos)
 
 # --- Interfaz de Usuario ---
-st.title("🧮 Analizador Polinomial")
-st.info("Introduce los coeficientes para obtener las raíces (reales y complejas) automáticamente.")
+st.title("🎯 Buscador de Raíces")
+st.markdown("---")
 
-# --- Configuración en Sidebar (Colapsable en móvil) ---
+# --- Configuración en Sidebar ---
 with st.sidebar:
-    st.header("Ajustes")
-    grado = st.number_input("Grado del Polinomio", min_value=1, max_value=15, value=3)
-    st.caption("Nota: El grado define cuántas cajas de entrada verás.")
+    st.header("⚙️ Configuración")
+    grado = st.number_input("Grado del Polinomio", min_value=1, max_value=20, value=3)
+    st.info("Al cambiar el grado, se generarán automáticamente los campos de entrada abajo.")
 
-# --- Contenedor de Entradas (Optimizado para móvil) ---
-# Usamos un expander para que el teclado del celular no tape toda la pantalla
-with st.expander("📝 Ingresar Coeficientes", expanded=True):
+# --- Entrada de Coeficientes (Columna Única) ---
+st.subheader("📝 Coeficientes del Polinomio")
+st.caption("Ingresa los valores de mayor a menor grado.")
+
+with st.expander("Abrir Editor de Coeficientes", expanded=True):
     coefs = []
-    # Usamos columnas pequeñas para que en móvil se vean de 2 en 2 o 1 en 1
-    # Streamlit maneja el wrapping automáticamente
-    cols = st.columns(2) 
-    
+    # Al no usar st.columns(), Streamlit apila todo en una sola columna por defecto
     for i in range(grado + 1):
-        idx_col = i % 2 # Alterna entre las 2 columnas
         potencia = grado - i
-        label = f"x^{potencia}" if potencia > 0 else "T. Independiente"
-        
-        with cols[idx_col]:
-            val = st.number_input(label, value=1.0 if i == 0 else 0.0, key=f"c_{i}")
-            coefs.append(val)
+        if potencia > 1:
+            label = f"Coeficiente de x^{potencia}"
+        elif potencia == 1:
+            label = "Coeficiente de x"
+        else:
+            label = "Término Independiente"
+            
+        val = st.number_input(
+            label, 
+            value=1.0 if i == 0 else 0.0, 
+            key=f"c_input_{i}",
+            format="%.4f" # Permite precisión decimal
+        )
+        coefs.append(val)
 
-# --- Botón de Acción Principal ---
-if st.button("🚀 Calcular Raíces", type="primary", use_container_width=True):
+# --- Procesamiento y Resultados ---
+st.markdown("---")
+if st.button("🚀 Calcular Raíces Ahora", type="primary", use_container_width=True):
     if coefs[0] == 0:
-        st.error("El primer coeficiente no puede ser cero (define el grado).")
+        st.warning("⚠️ El coeficiente principal (el primero) no puede ser 0.")
     else:
-        df_raices = calcular_raices(coefs)
-        
-        # --- Visualización de Resultados ---
-        st.subheader("📍 Resultados")
-        
-        # Tabla compacta para pantallas pequeñas
-        st.dataframe(
-            df_raices[["ID", "Valor", "Tipo"]], 
-            hide_index=True, 
-            use_container_width=True
-        )
-        
-        # Gráfico del Plano Complejo
-        st.subheader("📊 Plano de Argand")
-        st.scatter_chart(
-            df_raices,
-            x="Real",
-            y="Imag",
-            color="Tipo",
-            size=80,
-            use_container_width=True
-        )
-        
-        # Resumen rápido
-        reales = len(df_raices[df_raices["Tipo"] == "Real"])
-        imaginarias = len(df_raices) - reales
-        
-        c1, c2 = st.columns(2)
-        c1.metric("Reales", reales)
-        c2.metric("Imaginarias", imaginarias)
+        try:
+            df_raices = calcular_raices(coefs)
+            
+            # Métricas rápidas
+            c1, c2 = st.columns(2)
+            reales = len(df_raices[df_raices["Tipo"] == "Real"])
+            imaginarias = len(df_raices) - reales
+            c1.metric("Raíces Reales", reales)
+            c2.metric("Raíces Complejas", imaginarias)
 
-# --- Footer Informativo ---
-st.divider()
-st.caption("Desarrollado con Streamlit • Motor NumPy 1.26+")
+            # Tabla de resultados
+            st.markdown("### 📋 Soluciones Encontradas")
+            st.dataframe(
+                df_raices[["ID", "Valor", "Tipo"]], 
+                use_container_width=True, 
+                hide_index=True
+            )
+
+            # Visualización en Plano de Argand
+            if imaginarias > 0:
+                st.markdown("### 📊 Localización en Plano Complejo")
+                st.scatter_chart(
+                    df_raices,
+                    x="Real",
+                    y="Imag",
+                    color="Tipo",
+                    size=100,
+                    use_container_width=True
+                )
+            else:
+                st.success("✨ Todas las raíces son reales. Se encuentran sobre el eje X.")
+                
+        except Exception as e:
+            st.error(f"Hubo un error en el cálculo: {e}")
+
+# --- Pie de página móvil ---
+st.markdown("<br><br>", unsafe_allow_html=True)
+st.caption("📱 Optimizado para visualización en dispositivos móviles.")
